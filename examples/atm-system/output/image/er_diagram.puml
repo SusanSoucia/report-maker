@@ -1,0 +1,111 @@
+@startuml
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName SimSun
+skinparam entityFontSize 13
+
+entity "Account\n账户" as Account {
+  * account_id : VARCHAR(32) <<PK>>
+  --
+  card_number : VARCHAR(20) <<UK>>
+  pin_hash : VARCHAR(256)
+  holder_name : VARCHAR(50)
+  balance : DECIMAL(15,2)
+  version : BIGINT
+  status : ENUM('active','frozen','closed')
+  created_at : TIMESTAMP
+  updated_at : TIMESTAMP
+}
+
+entity "Card\n银行卡" as Card {
+  * card_number : VARCHAR(20) <<PK>>
+  --
+  account_id : VARCHAR(32) <<FK>>
+  holder_name : VARCHAR(50)
+  expiry_date : DATE
+  cvv_hash : VARCHAR(256)
+  card_type : ENUM('debit','credit')
+  status : ENUM('active','locked','expired')
+}
+
+entity "TransactionRecord\n交易记录" as TxRecord {
+  * tx_id : VARCHAR(32) <<PK>>
+  --
+  account_id : VARCHAR(32) <<FK>>
+  tx_type : ENUM('withdraw','deposit','transfer_in','transfer_out','query')
+  amount : DECIMAL(15,2)
+  target_account_id : VARCHAR(32)
+  auth_code : VARCHAR(64)
+  status : ENUM('pending','authorized','confirmed','cancelled','failed')
+  retry_count : INT
+  idempotency_key : VARCHAR(64) <<UK>>
+  created_at : TIMESTAMP
+  completed_at : TIMESTAMP
+}
+
+entity "AuditLog\n审计日志" as AuditLog {
+  * log_id : BIGINT <<PK, AUTO>>
+  --
+  event_type : VARCHAR(50)
+  account_id : VARCHAR(32)
+  tx_id : VARCHAR(32)
+  atm_id : VARCHAR(16)
+  message : TEXT
+  severity : ENUM('INFO','WARN','ERROR','CRITICAL')
+  created_at : TIMESTAMP
+}
+
+entity "ATMDevice\nATM 设备" as ATMDevice {
+  * atm_id : VARCHAR(16) <<PK>>
+  --
+  location : VARCHAR(200)
+  ip_address : VARCHAR(45)
+  cash_inventory : INT
+  status : ENUM('online','offline','maintenance','fault')
+  last_heartbeat : TIMESTAMP
+  fw_version : VARCHAR(20)
+}
+
+entity "DeviceFault\n设备故障记录" as DeviceFault {
+  * fault_id : BIGINT <<PK, AUTO>>
+  --
+  atm_id : VARCHAR(16) <<FK>>
+  device_type : VARCHAR(30)
+  fault_code : VARCHAR(20)
+  description : TEXT
+  severity : ENUM('minor','major','critical')
+  occurred_at : TIMESTAMP
+  resolved_at : TIMESTAMP
+}
+
+entity "DailySummary\n日终汇总" as DailySummary {
+  * summary_id : BIGINT <<PK, AUTO>>
+  --
+  atm_id : VARCHAR(16) <<FK>>
+  summary_date : DATE
+  withdraw_count : INT
+  withdraw_total : DECIMAL(15,2)
+  deposit_count : INT
+  deposit_total : DECIMAL(15,2)
+  transfer_count : INT
+  transfer_total : DECIMAL(15,2)
+  error_count : INT
+}
+
+' 关系
+Account ||--|| Card : "1 : 1"
+Account ||--o{ TxRecord : "1 : N"
+TxRecord }o--|| AuditLog : "N : 1 (可关联)"
+ATMDevice ||--o{ TxRecord : "1 : N"
+ATMDevice ||--o{ DeviceFault : "1 : N"
+ATMDevice ||--o{ DailySummary : "1 : N"
+
+note right of TxRecord
+  idempotency_key 保证幂等
+  version 字段实现乐观锁
+end note
+
+note right of AuditLog
+  异步写入，不影响交易性能
+  保留 3 年用于审计
+end note
+@enduml

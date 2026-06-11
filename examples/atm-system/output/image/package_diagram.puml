@@ -1,0 +1,94 @@
+@startuml
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName SimSun
+skinparam packageFontSize 14
+skinparam componentFontSize 13
+
+package "atm.ui\nATM 界面层" #E8F5E9 {
+  [ATMController\n主控制器] as Ctrl
+  [Screen\n屏幕] as Screen
+  [Keypad\n键盘] as Keypad
+}
+
+package "atm.transaction\n交易处理层" #E3F2FD {
+  [TransactionProcessor\n交易处理器] as TP
+  [WithdrawTransaction\n取款交易] as WithdrawTx
+  [TransferTransaction\n转账交易] as TransferTx
+  [DepositTransaction\n存款交易] as DepositTx
+  [QueryTransaction\n查询交易] as QueryTx
+  [ConcurrencyManager\n并发管理器] as ConcurMgr
+}
+
+package "atm.account\n账户服务层" #FFF3E0 {
+  [AccountManager\n账户管理器] as AcctMgr
+  [Account\n账户] as Account
+}
+
+package "atm.hardware\n硬件抽象层" #FCE4EC {
+  [HardwareController\n硬件控制器] as HW
+  [CardReader\n读卡器] as CardReader
+  [CashDispenser\n出钞机] as CashOut
+  [DepositSlot\n存款槽] as DepositSlot
+  [ReceiptPrinter\n凭条打印机] as Printer
+}
+
+package "atm.network\n网络通信层" #F3E5F5 {
+  [NetworkModule\n网络模块] as Network
+  [ConnectionPool\n连接池] as ConnPool
+}
+
+package "atm.security\n安全模块" #E0F2F1 {
+  [Authenticator\n认证器] as Auth
+  [Encryptor\n加密器] as Encrypt
+}
+
+package "atm.logging\n审计日志" #ECEFF1 {
+  [AuditLogger\n审计日志] as Logger
+}
+
+cloud "银行核心系统\nBankCoreSystem" #FFEBEE {
+  [BankCoreSystem] as Bank
+}
+
+' 依赖关系
+Ctrl --> TP : 委托交易
+Ctrl --> Screen
+Ctrl --> Keypad
+
+TP --> WithdrawTx : 创建
+TP --> TransferTx : 创建
+TP --> DepositTx : 创建
+TP --> QueryTx : 创建
+TP --> ConcurMgr : 调用
+TP --> AcctMgr : 调用
+TP --> HW : 调用
+TP --> Network : 调用
+TP --> Logger : 调用
+
+AcctMgr --> Network : 依赖
+AcctMgr --> Account : 管理
+
+HW --> CardReader
+HW --> CashOut
+HW --> DepositSlot
+HW --> Printer
+
+Network --> ConnPool : 管理
+Network --> Auth : 依赖
+Network --> Encrypt : 依赖
+Network --> Bank : 通信
+
+Auth --> Encrypt : 依赖
+
+note right of TP
+  交易处理器是核心调度者
+  通过 Strategy 模式
+  适配不同交易类型
+end note
+
+note bottom of Network
+  所有银行通信通过
+  TLS 1.3 加密传输
+  支持请求重试与幂等
+end note
+@enduml

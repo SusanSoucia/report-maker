@@ -1,0 +1,210 @@
+@startuml
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName SimSun
+skinparam classFontSize 13
+skinparam packageFontSize 14
+
+package "atm.ui" #F5F5F5 {
+  class ATMController {
+    - state: ATMState
+    - session: Session
+    + start()
+    + shutDown()
+    + insertCard(card): void
+    + ejectCard(): void
+    + inputPIN(pin): boolean
+    + selectTransaction(type): void
+  }
+
+  class Screen {
+    + showMessage(text): void
+    + showMenu(options): void
+    + promptInput(prompt): String
+  }
+
+  class Keypad {
+    + readInput(): String
+    + readPIN(): String
+  }
+}
+
+package "atm.transaction" #F5F5F5 {
+  abstract class Transaction {
+    # accountId: String
+    # amount: Decimal
+    + {abstract} execute(): TransactionResult
+    + {abstract} validate(): boolean
+    - logTransaction(): void
+  }
+
+  class WithdrawTransaction {
+    + execute(): TransactionResult
+    + validate(): boolean
+  }
+
+  class TransferTransaction {
+    - targetAccountId: String
+    + execute(): TransactionResult
+    + validate(): boolean
+  }
+
+  class DepositTransaction {
+    + execute(): TransactionResult
+    + validate(): boolean
+  }
+
+  class QueryTransaction {
+    + execute(): TransactionResult
+    + validate(): boolean
+  }
+
+  class TransactionProcessor {
+    - strategy: TransactionStrategy
+    - concurrencyManager: ConcurrencyManager
+    + setStrategy(strategy): void
+    + processTransaction(tx: Transaction): TransactionResult
+    + preAuthorize(tx): AuthResult
+    + confirmTransaction(authCode): boolean
+    + cancelTransaction(authCode): boolean
+  }
+
+  interface TransactionStrategy {
+    + execute(tx: Transaction): TransactionResult
+    + preAuthorize(tx): AuthResult
+    + confirm(authCode): boolean
+    + cancel(authCode): boolean
+  }
+
+  class ConcurrencyManager {
+    - locks: Map<AccountId, Lock>
+    - retryPolicy: RetryPolicy
+    + acquireLock(accountId): boolean
+    + releaseLock(accountId): void
+    + executeWithRetry(tx): TransactionResult
+  }
+}
+
+package "atm.account" #F5F5F5 {
+  class AccountManager {
+    - accounts: AccountRepository
+    + verifyAccount(cardNumber, pin): Account
+    + getBalance(accountId): Decimal
+    + checkSufficient(accountId, amount): boolean
+    + updateBalance(accountId, amount): void
+  }
+
+  class Account {
+    - accountId: String
+    - cardNumber: String
+    - pinHash: String
+    - balance: Decimal
+    - version: Long
+    + debit(amount): boolean
+    + credit(amount): void
+  }
+
+  class Card {
+    - cardNumber: String
+    - holderName: String
+    - expiryDate: Date
+    - cvv: String
+  }
+}
+
+package "atm.hardware" #F5F5F5 {
+  class HardwareController {
+    - cardReader: CardReader
+    - cashDispenser: CashDispenser
+    - depositSlot: DepositSlot
+    - receiptPrinter: ReceiptPrinter
+    + dispenseCash(amount): boolean
+    + acceptDeposit(): boolean
+    + readCard(): Card
+    + printReceipt(content): boolean
+    + ejectCard(): void
+  }
+
+  class CardReader {
+    + readCard(): Card
+    + retainCard(): void
+    + ejectCard(): void
+  }
+
+  class CashDispenser {
+    - cashInventory: int
+    + dispense(amount): boolean
+    + getInventory(): int
+  }
+
+  class DepositSlot {
+    + acceptEnvelope(): boolean
+    + validateDeposit(): boolean
+  }
+
+  class ReceiptPrinter {
+    + print(content): boolean
+    + checkPaper(): boolean
+  }
+}
+
+package "atm.network" #F5F5F5 {
+  class NetworkModule {
+    - tlsConfig: TLSConfig
+    - connectionPool: ConnectionPool
+    + sendRequest(endpoint, payload): Response
+    + checkConnectivity(): boolean
+  }
+}
+
+package "atm.security" #F5F5F5 {
+  class Authenticator {
+    + validatePIN(input, storedHash): boolean
+    + generateToken(account): Token
+  }
+
+  class Encryptor {
+    + encrypt(data): Ciphertext
+    + decrypt(ciphertext): Data
+    + hash(data): Hash
+  }
+}
+
+package "atm.logging" #F5F5F5 {
+  class AuditLogger {
+    - logQueue: Queue
+    + log(event, ...params): void
+    + query(start, end): LogEntry[]
+  }
+}
+
+' 核心关系
+ATMController --> TransactionProcessor : 委托
+ATMController --> Screen
+ATMController --> Keypad
+
+TransactionProcessor --> Transaction : 创建
+TransactionProcessor --> TransactionStrategy : 持有
+TransactionProcessor --> ConcurrencyManager
+TransactionProcessor --> AccountManager : 依赖
+TransactionProcessor --> NetworkModule : 依赖
+TransactionProcessor --> AuditLogger : 依赖
+
+Transaction <|-- WithdrawTransaction
+Transaction <|-- TransferTransaction
+Transaction <|-- DepositTransaction
+Transaction <|-- QueryTransaction
+
+TransactionProcessor --> HardwareController : 依赖
+
+AccountManager --> NetworkModule : 依赖
+AccountManager "1" --* "*" Account
+
+HardwareController --> CardReader
+HardwareController --> CashDispenser
+HardwareController --> DepositSlot
+HardwareController --> ReceiptPrinter
+
+NetworkModule --> Encryptor : 依赖
+Authenticator --> Encryptor : 依赖
+
+@enduml

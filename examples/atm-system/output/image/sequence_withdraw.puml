@@ -1,0 +1,78 @@
+@startuml
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName SimSun
+skinparam participantFontSize 13
+skinparam sequenceMessageFontSize 12
+
+actor "用户" as User
+participant "ATM界面\nUserInterface" as UI
+participant "交易处理器\nTransactionProcessor" as TP
+participant "账户服务\nAccountManager" as AM
+participant "硬件控制器\nHardwareController" as HC
+participant "网络模块\nNetworkModule" as NM
+participant "银行核心系统\nBankCoreSystem" as Bank
+participant "审计日志\nAuditLogger" as Log
+
+== 身份验证 ==
+User -> UI: 插卡并输入PIN
+UI -> TP: validateIdentity(cardNumber, pin)
+TP -> AM: verifyAccount(cardNumber, pin)
+AM -> NM: sendAuthRequest(cardNumber, pin)
+NM -> Bank: authRequest(cardNumber, pin)
+Bank --> NM: authResult(success, accountInfo)
+NM --> AM: authResult(success, accountInfo)
+AM --> TP: accountVerified(accountInfo)
+
+alt 身份验证成功
+  TP -> Log: log("身份验证成功", cardNumber)
+  TP --> UI: showTransactionMenu()
+  UI --> User: 显示交易菜单
+else 身份验证失败
+  TP -> Log: log("身份验证失败", cardNumber)
+  TP --> UI: showError("PIN错误")
+  UI --> User: 提示密码错误，请重试
+end
+
+== 取款交易 ==
+User -> UI: 选择"取款"并输入金额
+UI -> TP: withdraw(accountId, amount)
+TP -> NM: requestPreAuth(accountId, amount)
+NM -> Bank: preAuthRequest(accountId, amount)
+Bank --> NM: preAuthResult(success, authCode, balance)
+
+alt 预授权成功
+  NM --> TP: preAuthGranted(authCode)
+  TP -> HC: dispenseCash(amount)
+
+  alt 出钞成功
+    HC --> TP: cashDispensed()
+    TP -> NM: confirmTransaction(authCode)
+    NM -> Bank: confirmRequest(authCode)
+    Bank --> NM: confirmAck()
+    NM --> TP: transactionConfirmed()
+    TP -> Log: log("取款成功", accountId, amount)
+    TP -> HC: printReceipt(transactionInfo)
+    HC --> TP: receiptPrinted()
+    TP --> UI: showResult("交易成功", amount)
+    UI --> User: 显示"交易成功"
+    TP -> HC: ejectCard()
+    HC --> TP: cardEjected()
+    UI --> User: 提示取走银行卡
+  else 出钞失败
+    HC --> TP: dispenseError("出钞设备故障")
+    TP -> NM: cancelTransaction(authCode)
+    NM -> Bank: cancelRequest(authCode)
+    Bank --> NM: cancelAck()
+    NM --> TP: transactionCancelled()
+    TP -> Log: log("出钞失败，交易已撤销", accountId, amount)
+    TP --> UI: showError("设备故障，交易已撤销")
+    UI --> User: 提示设备故障、交易已撤销
+  end
+else 预授权失败（余额不足等）
+  Bank --> NM: preAuthFailed(reason)
+  NM --> TP: preAuthDenied(reason)
+  TP -> Log: log("取款失败", accountId, amount, reason)
+  TP --> UI: showError("余额不足或交易失败")
+  UI --> User: 显示余额不足或交易失败
+end
+@enduml

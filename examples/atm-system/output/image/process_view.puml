@@ -1,0 +1,89 @@
+@startuml
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName SimSun
+skinparam participantFontSize 12
+
+participant "主线程\nMainThread\n(ATMController 事件循环)" as Main
+participant "交易线程池\nTransactionPool\n(3 个工作线程)" as TxPool
+participant "网络 I/O 线程池\nNetworkPool\n(4 个线程)" as NetPool
+participant "硬件监控线程\nHardwareMonitor\n(1 个守护线程)" as HWMon
+participant "审计日志线程\nAuditLogger\n(1 个异步线程)" as LogThread
+database "交易日志文件\ntransactions.log" as LogFile
+database "PostgreSQL 主库\n(读写)" as DB
+
+== 系统启动 ==
+Main -> Main: 初始化硬件模块
+Main -> Main: 加载配置
+Main -> TxPool: 创建线程池(3)
+Main -> NetPool: 创建线程池(4)
+Main -> HWMon: 启动硬件监控
+Main -> LogThread: 启动异步日志线程
+Main -> Main: 进入事件循环
+
+== 交易处理流程 ==
+Main -> Main: 接收用户输入(插卡/PIN)
+Main -> Main: 状态转换: Idle → Authenticated
+Main -> Main: 用户选择交易
+
+Main -> TxPool: submitTransaction(tx)
+note right of TxPool
+  从线程池分配工作线程
+  每个交易独立执行
+  避免阻塞主线程
+end note
+
+TxPool -> NetPool: sendRequest(preAuth)
+NetPool -> NetPool: TLS 握手 + 发送
+NetPool --> TxPool: preAuthResult
+
+alt 需要出钞
+  TxPool -> HWMon: requestDispense(amount)
+  HWMon -> HWMon: 检查硬件状态
+  HWMon -> HWMon: 执行出钞指令
+  HWMon --> TxPool: dispenseResult
+end
+
+TxPool -> NetPool: confirmTransaction()
+NetPool --> TxPool: confirmAck
+
+TxPool -> LogThread: asyncLog(event)
+LogThread -> LogFile: 异步写入日志
+
+TxPool --> Main: transactionComplete(result)
+Main -> Main: 更新 UI 状态
+Main -> Main: 退卡，状态 → Idle
+
+== 硬件故障检测 ==
+HWMon -> HWMon: 定期巡检(每 5s)
+HWMon -> HWMon: 检查出钞机/读卡器/打印机
+
+alt 检测到硬件故障
+  HWMon -> Main: notifyFault(device)
+  Main -> Main: 标记设备不可用
+  Main -> Main: 通知运维
+end
+
+== 连接断开恢复 ==
+NetPool -> NetPool: 心跳检测(每 30s)
+alt 连接断开
+  NetPool -> NetPool: 重连(指数退避)
+  NetPool -> Main: notifyStatus(DISCONNECTED)
+  Main -> Main: 进入离线模式
+  NetPool -> NetPool: 重连成功
+  NetPool -> Main: notifyStatus(CONNECTED)
+  Main -> Main: 恢复在线模式
+  Main -> Main: 重放离线缓存交易
+end
+
+== 系统关闭 ==
+Main -> Main: 收到关闭信号
+Main -> TxPool: shutdown(graceful)
+Main -> NetPool: shutdown(graceful)
+Main -> HWMon: shutdown()
+Main -> LogThread: flushAndShutdown()
+note right of LogThread
+  等待所有日志
+  写入完成后关闭
+end note
+Main -> Main: 释放资源，退出
+@enduml

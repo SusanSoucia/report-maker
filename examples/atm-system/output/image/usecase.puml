@@ -1,0 +1,55 @@
+@startuml
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName SimSun
+skinparam actorFontSize 14
+skinparam usecaseFontSize 14
+
+left to right direction
+
+actor "用户" as User
+actor "系统管理员" as Admin
+actor "银行核心系统" as Bank <<外部系统>>
+
+rectangle "ATM 自动存取款机系统" {
+  usecase "登录验证" as UC_Login
+  usecase "取款" as UC_Withdraw
+  usecase "存款" as UC_Deposit
+  usecase "转账" as UC_Transfer
+  usecase "余额查询" as UC_Query
+  usecase "修改密码" as UC_ChangePIN
+  usecase "打印凭条" as UC_PrintReceipt
+
+  usecase "系统维护" as UC_Maintenance
+  usecase "加钞" as UC_AddCash
+  usecase "查看运行日志" as UC_ViewLog
+
+  usecase "账户验证" as UC_VerifyAccount
+  usecase "交易授权" as UC_Authorize
+  usecase "交易确认" as UC_Confirm
+}
+
+User --> UC_Login
+User --> UC_Withdraw
+User --> UC_Deposit
+User --> UC_Transfer
+User --> UC_Query
+User --> UC_ChangePIN
+
+UC_Withdraw ..> UC_PrintReceipt : <<extend>>
+UC_Deposit ..> UC_PrintReceipt : <<extend>>
+UC_Transfer ..> UC_PrintReceipt : <<extend>>
+
+UC_Login ..> UC_VerifyAccount : <<include>>
+UC_Withdraw ..> UC_Authorize : <<include>>
+UC_Withdraw ..> UC_Confirm : <<include>>
+UC_Transfer ..> UC_Authorize : <<include>>
+UC_Transfer ..> UC_Confirm : <<include>>
+
+Bank --> UC_VerifyAccount
+Bank --> UC_Authorize
+Bank --> UC_Confirm
+
+Admin --> UC_Maintenance
+Admin --> UC_AddCash
+Admin --> UC_ViewLog
+@enduml

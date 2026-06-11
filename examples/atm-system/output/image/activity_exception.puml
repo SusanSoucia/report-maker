@@ -1,0 +1,81 @@
+@startuml
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName SimSun
+skinparam activityFontSize 13
+
+|用户|
+start
+:发起交易;
+
+|ATM 系统|
+:接收交易请求;
+
+|网络模块|
+:发送请求至银行;
+
+|银行核心系统|
+if (网络可达?) then (否)
+  |网络模块|
+  :重试连接(3次);
+  if (重试成功?) then (否)
+    |ATM 系统|
+    :进入离线模式;
+    :缓存交易请求;
+    :通知用户"网络不可用";
+    stop
+  else (是)
+  endif
+endif
+
+|银行核心系统|
+if (服务正常?) then (否)
+  |ATM 系统|
+  :提示"银行服务暂不可用";
+  :记录异常日志;
+  stop
+else (是)
+endif
+
+:处理交易请求;
+
+|银行核心系统|
+if (数据库可达?) then (否)
+  :触发数据库故障切换;
+  if (切换成功?) then (否)
+    |ATM 系统|
+    :交易超时;
+    :发送撤销请求(带幂等键);
+    :记录异常日志;
+    :通知用户"交易超时，已自动撤销";
+    stop
+  else (是)
+  endif
+endif
+
+:执行数据库操作;
+
+|ATM 系统|
+if (出钞/打印硬件正常?) then (否)
+  :向银行发送撤销请求;
+  :等待撤销确认;
+  if (撤销确认?) then (是)
+    :记录异常日志;
+    :通知用户"设备故障，交易已撤销";
+  else (否)
+    :标记为待处理异常;
+    :人工介入;
+    :告警通知运维;
+  endif
+  stop
+else (是)
+endif
+
+:完成交易;
+:记录审计日志;
+:打印凭条;
+
+|用户|
+:取走现金/银行卡;
+
+stop
+@enduml

@@ -1,0 +1,80 @@
+@startuml
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName SimSun
+skinparam nodeFontSize 13
+skinparam componentFontSize 12
+
+cloud "银行内网" #E8F5E9 {
+  node "银行核心系统\nBankCoreSystem" as Bank {
+    [账户管理] as BankAcct
+    [交易处理] as BankTx
+    [清算中心] as BankClear
+  }
+}
+
+node "数据中心 DMZ" #FFF3E0 {
+  node "负载均衡器\nNginx (Active-Standby)" as LB {
+  }
+
+  node "应用服务器集群\nSpring Boot × 3" as AppCluster {
+    [ATM 业务服务\n实例 1] as App1
+    [ATM 业务服务\n实例 2] as App2
+    [ATM 业务服务\n实例 3] as App3
+  }
+
+  database "PostgreSQL\n(主从复制)" as DB {
+    [主库\n(读写)] as DBMaster
+    [从库\n(只读)] as DBSlave
+  }
+
+  node "HSM\n硬件安全模块" as HSM {
+    [密钥管理]
+    [签名验证]
+  }
+
+  node "监控服务器\nPrometheus + Grafana" as Monitor
+  node "日志中心\nELK Stack" as ELK
+}
+
+node "ATM 终端 × N\n(嵌入式 Linux)" as ATMTerminal {
+  [ATMController]
+  [读卡器]
+  [出钞机]
+  [凭条打印机]
+  [存款槽]
+  [PIN 键盘]
+  [触摸屏]
+}
+
+' 连接关系
+ATMTerminal --> LB : TLS 1.3\nHTTPS/REST
+LB --> AppCluster : 负载均衡\n轮询 + 健康检查
+
+AppCluster --> DBMaster : JDBC\n读写操作
+AppCluster --> DBSlave : JDBC\n只读查询
+AppCluster --> HSM : PKCS#11\n签名/验证
+AppCluster --> Bank : 专线/VPN\nISO 8583 报文
+
+DBMaster --> DBSlave : 异步复制
+
+AppCluster --> Monitor : metrics 推送
+AppCluster --> ELK : 日志推送
+
+note right of LB
+  健康检查: /health
+  每 10s 探测
+  故障自动切换
+end note
+
+note bottom of DB
+  主从切换 < 30s
+  每日全量备份
+  保留 30 天 WAL 日志
+end note
+
+note right of ATMTerminal
+  每台 ATM 终端为独立节点
+  通过 4G/有线接入
+  支持离线缓存模式
+end note
+@enduml

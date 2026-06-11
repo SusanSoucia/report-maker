@@ -1,0 +1,119 @@
+@startuml
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName SimSun
+skinparam activityFontSize 13
+
+start
+:用户插卡;
+:系统读取卡片信息;
+
+if (卡片有效?) then (否)
+  :提示"无效卡片";
+  :退卡;
+  stop
+else (是)
+endif
+
+:提示输入PIN;
+:用户输入PIN;
+
+if (PIN验证?) then (失败)
+  :记录失败次数;
+  if (失败次数 >= 3?) then (是)
+    :锁定卡片;
+    :吞卡并告警;
+    stop
+  else (否)
+    :提示PIN错误，重新输入;
+  endif
+else (通过)
+endif
+
+repeat
+  :显示交易菜单;
+  :用户选择交易类型;
+
+  switch (交易类型)
+  case (取款)
+    :输入取款金额;
+    if (余额充足?) then (否)
+      :提示余额不足;
+      stop
+    else (是)
+    endif
+    :向银行申请预授权;
+    if (预授权通过?) then (否)
+      :提示交易失败;
+      stop
+    else (是)
+    endif
+    :出钞;
+    if (出钞成功?) then (否)
+      :撤销预授权;
+      :提示设备故障;
+      stop
+    else (是)
+    endif
+    :确认扣款;
+    :打印凭条;
+    :记录日志;
+
+  case (存款)
+    :打开存款槽;
+    :用户放入现金;
+    :验钞并计数;
+    if (验钞通过?) then (否)
+      :退回现金;
+      stop
+    else (是)
+    endif
+    :确认存款金额;
+    :更新账户余额;
+    :打印凭条;
+    :记录日志;
+
+  case (转账)
+    :输入目标账号和金额;
+    if (目标账号有效?) then (否)
+      :提示账号无效;
+      stop
+    else (是)
+    endif
+    if (余额充足?) then (否)
+      :提示余额不足;
+      stop
+    else (是)
+    endif
+    :转账预授权;
+    if (预授权通过?) then (否)
+      :提示转账失败;
+      stop
+    else (是)
+    endif
+    :扣款+入账;
+    :打印凭条;
+    :记录日志;
+
+  case (余额查询)
+    :查询账户余额;
+    :显示余额;
+    :记录日志;
+
+  case (修改密码)
+    :输入原密码;
+    :输入新密码(两次);
+    if (新密码一致且符合规则?) then (否)
+      :提示修改失败;
+      stop
+    else (是)
+    endif
+    :更新密码;
+    :记录日志;
+  endswitch
+
+repeatwhile (继续交易?) is (是)
+->否;
+:退卡;
+:提示取走银行卡;
+stop
+@enduml

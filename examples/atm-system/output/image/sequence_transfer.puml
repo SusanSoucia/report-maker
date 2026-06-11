@@ -1,0 +1,72 @@
+@startuml
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName SimSun
+skinparam participantFontSize 13
+skinparam sequenceMessageFontSize 12
+
+actor "用户" as User
+participant "ATM界面\nUserInterface" as UI
+participant "交易处理器\nTransactionProcessor" as TP
+participant "账户服务\nAccountManager" as AM
+participant "网络模块\nNetworkModule" as NM
+participant "银行核心系统\nBankCoreSystem" as Bank
+participant "硬件控制器\nHardwareController" as HC
+participant "审计日志\nAuditLogger" as Log
+
+== 身份验证 ==
+User -> UI: 插卡并输入PIN
+UI -> TP: validateIdentity(cardNumber, pin)
+TP -> AM: verifyAccount(cardNumber, pin)
+AM -> NM: sendAuthRequest(cardNumber, pin)
+NM -> Bank: authRequest(cardNumber, pin)
+Bank --> NM: authResult(success, accountInfo)
+NM --> AM: authResult(success, accountInfo)
+AM --> TP: accountVerified(accountInfo)
+
+alt 身份验证成功
+  TP --> UI: showTransactionMenu()
+  UI --> User: 显示交易菜单
+else 验证失败
+  TP --> UI: showError("PIN错误")
+  UI --> User: 提示密码错误
+end
+
+== 转账交易 ==
+User -> UI: 选择"转账"，输入目标账号和金额
+UI -> TP: transfer(fromAccountId, toAccountId, amount)
+TP -> NM: requestTransferPreAuth(fromAccountId, toAccountId, amount)
+NM -> Bank: transferPreAuthRequest(from, to, amount)
+
+alt 预授权成功
+  Bank --> NM: preAuthGranted(authCode)
+  NM --> TP: preAuthGranted(authCode)
+  TP -> Log: log("转账预授权通过", fromAccountId, toAccountId, amount)
+  TP -> NM: confirmTransfer(authCode)
+  NM -> Bank: transferConfirmRequest(authCode)
+
+  alt 转账确认成功
+    Bank --> NM: transferConfirmed()
+    NM --> TP: transferConfirmed()
+    TP -> Log: log("转账成功", fromAccountId, toAccountId, amount)
+    TP -> HC: printReceipt(transferInfo)
+    note right of HC: HardwareController\n(隐性引用)
+    HC --> TP: receiptPrinted()
+    TP --> UI: showResult("转账成功", amount)
+    UI --> User: 显示"转账成功"
+    TP -> HC: ejectCard()
+    UI --> User: 提示取走银行卡
+  else 转账确认失败
+    Bank --> NM: transferFailed(reason)
+    NM --> TP: transferFailed(reason)
+    TP -> Log: log("转账确认失败", fromAccountId, toAccountId, amount, reason)
+    TP --> UI: showError("转账失败: " + reason)
+    UI --> User: 显示转账失败原因
+  end
+else 预授权失败
+  Bank --> NM: preAuthFailed(reason)
+  NM --> TP: preAuthDenied(reason)
+  TP -> Log: log("转账预授权失败", fromAccountId, toAccountId, amount, reason)
+  TP --> UI: showError(reason)
+  UI --> User: 显示转账失败原因
+end
+@enduml
