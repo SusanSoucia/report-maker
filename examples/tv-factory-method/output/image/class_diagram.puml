@@ -1,0 +1,79 @@
+@startuml
+' 工厂方法模式 — 电视机工厂 UML 类图
+
+skinparam classAttributeIconSize 0
+skinparam classFontStyle bold
+
+' 抽象产品
+interface TV {
+    + play(): void
+}
+
+' 具体产品
+class HaierTV {
+    + play(): void
+}
+
+class HisenseTV {
+    + play(): void
+}
+
+' 抽象工厂
+interface TVFactory {
+    + createTV(): TV
+}
+
+' 具体工厂
+class HaierTVFactory {
+    + createTV(): TV
+}
+
+class HisenseTVFactory {
+    + createTV(): TV
+}
+
+' 客户端
+class Client {
+    + main(args: String[]): void
+}
+
+' ===== 关系 =====
+' 具体产品实现抽象产品
+TV <|.. HaierTV
+TV <|.. HisenseTV
+
+' 具体工厂实现抽象工厂
+TVFactory <|.. HaierTVFactory
+TVFactory <|.. HisenseTVFactory
+
+' 抽象工厂依赖抽象产品（createTV 返回 TV 类型）
+TVFactory ..> TV : <<returns>>
+
+' 具体工厂创建具体产品
+HaierTVFactory ..> HaierTV : <<creates>>
+HisenseTVFactory ..> HisenseTV : <<creates>>
+
+' Client 依赖两个抽象：
+'   - TVFactory：通过工厂方法获取产品
+'   - TV：调用产品的方法（play()）
+Client ..> TVFactory : uses
+Client ..> TV : uses
+
+note right of TVFactory
+  工厂方法模式四大角色：
+  ① Product（抽象产品）：TV
+  ② ConcreteProduct（具体产品）
+      HaierTV、HisenseTV
+  ③ Creator（抽象工厂）：TVFactory
+  ④ ConcreteCreator（具体工厂）
+      HaierTVFactory、HisenseTVFactory
+end note
+
+note bottom of Client
+  Client 只依赖两个抽象
+  （TVFactory 和 TV），
+  不感知任何具体产品类。
+  new HaierTV() 只出现在
+  HaierTVFactory 内部。
+end note
+@enduml
